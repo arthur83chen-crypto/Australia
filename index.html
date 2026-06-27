@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>Australia Trip Pro</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0B1F35">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="apple-touch-icon" href="images/icon-192.png">
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+</head>
+<body>
+
+  <!-- PWA 安裝提示欄 -->
+  <div id="pwaBanner">
+    <span>💡 安裝至桌面，享受完整離線體驗</span>
+    <button onclick="installPWA()">安裝</button>
+    <button class="pwa-dismiss" onclick="document.getElementById('pwaBanner').style.display='none'">✕</button>
+  </div>
+
+  <!-- 🏠 首頁 / 行程 -->
+  <div id="page-home" class="page active">
+    <header class="hero">
+      <img src="images/banner/sydney-opera-house.jpg" id="heroImage" alt="Hero" onerror="this.style.background='linear-gradient(135deg,#0a2138,#1a4a7a)';this.removeAttribute('src')">
+      <div class="heroOverlay">
+        <div class="tripTitle">Australia Road Trip</div>
+        <div class="tripSub">Sydney → Blue Mountains → Kiama → Brisbane</div>
+      </div>
+    </header>
+
+    <section class="dashboard">
+      <div class="card">
+        <div class="cardTitle">📍 目前城市</div>
+        <div class="cardValue" id="cityName">Sydney</div>
+      </div>
+      <div class="card">
+        <div class="cardTitle">📅 旅程天數</div>
+        <div class="cardValue" id="dayNumber">1</div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="sectionTitle">🗺️ 行程安排</div>
+      <input id="searchBox" class="search-box" placeholder="🔍 搜尋景點、備註...">
+
+      <div class="input-bar">
+        <input id="quickInput" type="text" placeholder="⚡ 快速新增景點至第一天">
+        <button class="primary-btn" onclick="quickAddPlace()" aria-label="新增">+</button>
+      </div>
+
+      <div id="tripContainer"></div>
+    </section>
+  </div>
+
+  <!-- 🧳 行李清單 -->
+  <div id="page-bag" class="page">
+    <section class="section">
+      <div class="sectionTitle">🧳 行李清單</div>
+
+      <div class="input-bar">
+        <select id="bagCategorySelect">
+          <!-- Options populated dynamically from store.bags keys -->
+        </select>
+        <input id="bagInput" type="text" placeholder="新增項目...">
+        <button class="primary-btn" onclick="addBagItem()" aria-label="新增">+</button>
+      </div>
+
+      <div id="bagProgress" class="bag-progress"></div>
+      <div id="bagContainer" class="bagGrid"></div>
+    </section>
+  </div>
+
+  <!-- 💰 記帳 -->
+  <div id="page-money" class="page">
+    <section class="section">
+      <div class="sectionTitle">💰 旅行記帳</div>
+      <div class="empty-state">
+        <div class="empty-icon">💰</div>
+        <div class="empty-text">記帳功能建置中</div>
+        <div class="empty-sub">即將推出，敬請期待</div>
+      </div>
+    </section>
+  </div>
+
+  <!-- 👤 更多 -->
+  <div id="page-more" class="page">
+    <section class="section">
+      <div class="sectionTitle">⚙️ 設定與資訊</div>
+      <div class="more-card">
+        <div class="more-row">
+          <span>版本</span>
+          <span class="more-val">v1.1.0</span>
+        </div>
+        <div class="more-row">
+          <span>行程數</span>
+          <span class="more-val" id="infoTripCount">—</span>
+        </div>
+        <div class="more-row">
+          <span>行李項目</span>
+          <span class="more-val" id="infoBagCount">—</span>
+        </div>
+      </div>
+      <button class="danger-btn" onclick="resetData()">🗑 清除所有資料</button>
+    </section>
+  </div>
+
+  <!-- FAB -->
+  <button class="fab" id="editButton" aria-label="新增行程">✏️</button>
+
+  <!-- 底部導覽 -->
+  <nav class="bottomBar" role="navigation">
+    <button class="tab active" data-page="home"><i>🏠</i><span>首頁</span></button>
+    <button class="tab" data-page="home"><i>🗺️</i><span>行程</span></button>
+    <button class="tab" data-page="bag"><i>🧳</i><span>行李</span></button>
+    <button class="tab" data-page="money"><i>💰</i><span>記帳</span></button>
+    <button class="tab" data-page="more"><i>👤</i><span>更多</span></button>
+  </nav>
+
+  <!-- 行程編輯 Modal -->
+  <div id="editModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modalCard">
+      <div class="modalHeader">
+        <h2 id="modalTitle">✏️ 編輯行程</h2>
+        <button onclick="closeEditor()" aria-label="關閉">✕</button>
+      </div>
+      <div class="modalBody">
+        <label for="editDayNum">天數 (Day)</label>
+        <input id="editDayNum" type="number" min="1" placeholder="1">
+        <label for="editDate">日期</label>
+        <input id="editDate" type="date">
+        <label for="editCity">城市</label>
+        <input id="editCity" type="text" placeholder="Sydney">
+        <label for="editPlace">景點名稱 *</label>
+        <input id="editPlace" type="text" placeholder="景點名稱">
+        <label for="editTime">時間</label>
+        <input id="editTime" type="time">
+        <label for="editNote">備註說明</label>
+        <textarea id="editNote" rows="3" placeholder="行程備註..."></textarea>
+        <label for="editBanner">Banner 圖片網址</label>
+        <input id="editBanner" type="url" placeholder="https://...">
+        <label for="editPhoto">景點圖片網址</label>
+        <input id="editPhoto" type="url" placeholder="https://...">
+        <button class="saveBtn" onclick="saveTrip()">💾 儲存行程</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" role="status" aria-live="polite"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
