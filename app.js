@@ -1,541 +1,397 @@
-// ─────────────────────────────────────────────
-// 🧠 核心全域狀態 (Single Source of Truth)
-// ─────────────────────────────────────────────
-const store = {
-  trips: [],
-  bags: {
-    "證件":    [{ text: "護照與簽證", done: false }, { text: "國際駕照", done: false }],
-    "電子用品": [{ text: "萬國轉接頭", done: false }, { text: "行動電源", done: false }],
-    "衣物":    [{ text: "防風外套", done: false }],
-    "盥洗用品": [{ text: "旅行牙刷組", done: false }],
-    "常備藥":  [{ text: "暈車藥", done: false }],
-    "其他":    [{ text: "太陽眼鏡", done: false }]
-  }
+// ===============================
+// Australia Trip v1.0
+// app.js (Part 1)
+// ===============================
+
+// ---------- LocalStorage ----------
+
+const STORAGE_KEY = "australia-trip-v1";
+
+let appData = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {
+
+    trips: [
+        {
+            day: 1,
+            city: "Sydney",
+            items: [
+                {
+                    time: "09:00",
+                    title: "Sydney Opera House"
+                },
+                {
+                    time: "11:30",
+                    title: "Sydney Fish Market"
+                },
+                {
+                    time: "15:00",
+                    title: "Queen Victoria Building"
+                }
+            ]
+        },
+        {
+            day: 2,
+            city: "Blue Mountains",
+            items: [
+                {
+                    time: "09:00",
+                    title: "Scenic World"
+                },
+                {
+                    time: "13:30",
+                    title: "Three Sisters"
+                }
+            ]
+        }
+    ],
+
+    packing: [
+
+        {
+            title:"📄 證件",
+            items:[
+                {name:"護照（確認效期一年以上）",done:false},
+                {name:"ETA簽證",done:false},
+                {name:"信用卡",done:false}
+            ]
+        },
+
+        {
+            title:"📱 電子用品",
+            items:[
+                {name:"手機",done:false},
+                {name:"充電器",done:false},
+                {name:"行動電源",done:false}
+            ]
+        },
+
+        {
+            title:"👕 衣物",
+            items:[
+                {name:"長袖",done:false},
+                {name:"短袖",done:false},
+                {name:"厚外套",done:false},
+                {name:"長褲",done:false},
+                {name:"內衣褲",done:false},
+                {name:"襪子",done:false},
+                {name:"帽子",done:false},
+                {name:"休閒鞋",done:false},
+                {name:"拖鞋",done:false},
+                {name:"圍巾",done:false}
+            ]
+        },
+
+        {
+            title:"🪥 盥洗用品",
+            items:[
+                {name:"牙刷",done:false},
+                {name:"牙膏",done:false},
+                {name:"洗面乳",done:false},
+                {name:"浴巾",done:false},
+                {name:"防曬 SPF50+",done:false}
+            ]
+        },
+
+        {
+            title:"💊 常備藥",
+            items:[
+                {name:"感冒藥",done:false},
+                {name:"腸胃藥",done:false},
+                {name:"止痛藥",done:false},
+                {name:"過敏藥",done:false},
+                {name:"個人藥品",done:false}
+            ]
+        },
+
+        {
+            title:"👜 其他",
+            items:[
+                {name:"水壺",done:false},
+                {name:"雨傘",done:false},
+                {name:"太陽眼鏡",done:false},
+                {name:"護唇膏",done:false}
+            ]
+        }
+
+    ],
+
+    expenses:[]
+
 };
 
-let editMode = null;          // 正在編輯的景點 id，null = 新增模式
-let sortableInstances = [];   // 🔑 追蹤所有 Sortable 實例，避免記憶體洩漏
+function saveData(){
 
-const defaultTrips = [
-  {
-    day: 1, date: "2026/07/02", city: "Sydney",
-    banner: "images/banner/sydney.jpg",
-    places: [
-      { id: 1001, time: "11:30", title: "Sydney Fish Market",  note: "大啖生蠔與龍蝦海鮮。",       img: "images/places/fishmarket.jpg" },
-      { id: 1002, time: "15:00", title: "Sydney Opera House",  note: "世界文化遺產拍照點。",       img: "images/places/opera-house.jpg" }
-    ]
-  },
-  {
-    day: 2, date: "2026/07/03", city: "Blue Mountains",
-    banner: "images/banner/blue-mountains.jpg",
-    places: [
-      { id: 1003, time: "09:00", title: "Scenic World", note: "體驗全世界最陡的森林鐵道纜車。", img: "images/places/scenic-world.jpg" }
-    ]
-  }
-];
+    localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify(appData)
+    );
 
-// ─────────────────────────────────────────────
-// 💾 資料持久化模組
-// ─────────────────────────────────────────────
-function loadData() {
-  try {
-    const cache = localStorage.getItem("appData_v2");
-    if (cache) {
-      const parsed = JSON.parse(cache);
-      store.trips = parsed.trips || [];
-      store.bags  = parsed.bags  || store.bags;
-    } else {
-      store.trips = JSON.parse(JSON.stringify(defaultTrips));
-      saveData();
-    }
-  } catch (e) {
-    console.error("資料損毀，還原預設值", e);
-    store.trips = JSON.parse(JSON.stringify(defaultTrips));
-  }
 }
 
-function saveData() {
-  try {
-    localStorage.setItem("appData_v2", JSON.stringify(store));
-  } catch (e) {
-    toast("⚠️ 儲存失敗（儲存空間不足）");
-  }
-}
+// ===============================
+// 分頁切換
+// ===============================
 
-// 移除空天數 → 重排 day 序號
-function normalizeDays() {
-  store.trips = store.trips.filter(d => d.places && d.places.length > 0);
-  store.trips.sort((a, b) => a.day - b.day);
-  store.trips.forEach((d, i) => { d.day = i + 1; });
-}
+const pages={
 
-// ─────────────────────────────────────────────
-// 🗺️ 行程渲染
-// ─────────────────────────────────────────────
-function renderTrips(keyword = "") {
-  const container = document.getElementById("tripContainer");
-  const cleanKey = keyword.trim().toLowerCase();
+    trip:document.getElementById("tripPage"),
 
-  // 🔑 銷毀舊 Sortable 實例，避免多重綁定
-  sortableInstances.forEach(s => s.destroy());
-  sortableInstances = [];
+    packing:document.getElementById("packingPage"),
 
-  // 完整重建 DOM
-  container.innerHTML = "";
+    expense:document.getElementById("expensePage"),
 
-  const daysToRender = store.trips
-    .map(dayGroup => ({
-      ...dayGroup,
-      filteredPlaces: dayGroup.places
-        .filter(p =>
-          cleanKey === "" ||
-          p.title.toLowerCase().includes(cleanKey) ||
-          p.note.toLowerCase().includes(cleanKey)
-        )
-        .slice()
-        .sort((a, b) => a.time.localeCompare(b.time))
-    }))
-    .filter(d => d.filteredPlaces.length > 0 || cleanKey === "");
+    more:document.getElementById("morePage")
 
-  if (daysToRender.length === 0) {
-    container.innerHTML = `
-      <div class="empty-state">
-        <div class="empty-icon">🔍</div>
-        <div class="empty-text">找不到符合的景點</div>
-        <div class="empty-sub">試試其他關鍵字</div>
-      </div>`;
-    return;
-  }
+};
 
-  daysToRender.forEach(dayGroup => {
-    const placesHTML = dayGroup.filteredPlaces.map(p => `
-      <div class="place" data-id="${p.id}">
-        <img class="placeImage"
-             src="${p.img || ''}"
-             alt="${p.title}"
-             onerror="this.src='';this.style.cssText='width:80px;height:80px;border-radius:12px;flex-shrink:0;background:linear-gradient(135deg,#0a2138,#1a4a7a)'">
-        <div class="placeInfo" onclick="editPlace(${p.id})">
-          <div class="placeTime">${p.time}</div>
-          <div class="placeTitle">${p.title}</div>
-          <div class="placeNote">${p.note}</div>
-        </div>
-        <button class="delBtn" onclick="deletePlace(event,${p.id})" aria-label="刪除">🗑</button>
-      </div>`).join("");
+document.querySelectorAll(".nav-btn").forEach(btn=>{
 
-    const safeBanner = (dayGroup.banner && dayGroup.banner.trim())
-      ? dayGroup.banner
-      : "images/banner/sydney.jpg";
+    btn.onclick=()=>{
 
-    const dayCard = document.createElement("div");
-    dayCard.className = "dayCard";
-    dayCard.dataset.day = dayGroup.day;
-    dayCard.innerHTML = `
-      <img class="dayImage" src="${safeBanner}" alt="Day ${dayGroup.day} banner"
-           onerror="this.style.cssText='height:160px;background:linear-gradient(135deg,#0a2138,#1a4a7a)';this.removeAttribute('src')">
-      <div class="dayContent" data-day="${dayGroup.day}">
-        <div class="dayTop">
-          <div class="dayBadge">Day ${dayGroup.day}</div>
-          <div class="dayCity">${dayGroup.city}</div>
-          <div class="dayDate">${dayGroup.date}</div>
-        </div>
-        ${placesHTML}
-      </div>`;
-    container.appendChild(dayCard);
-  });
+        document
+        .querySelectorAll(".nav-btn")
+        .forEach(b=>b.classList.remove("active"));
 
-  // 搜尋中停用拖曳（避免搜尋結果集合不完整時排序混亂）
-  if (cleanKey === "") initSortable();
+        btn.classList.add("active");
 
-  // 更新 Dashboard
-  updateDashboard();
-}
+        document
+        .querySelectorAll(".page")
+        .forEach(p=>p.classList.remove("active"));
 
-function updateDashboard() {
-  const today = new Date();
-  const todayStr = today.toISOString().split("T")[0].replace(/-/g, "/");
-  const currentDay = store.trips.find(d => d.date === todayStr) || store.trips[0];
-  if (currentDay) {
-    document.getElementById("cityName").textContent  = currentDay.city;
-    document.getElementById("dayNumber").textContent = currentDay.day;
-  }
-}
+        pages[
+            btn.dataset.page
+        ].classList.add("active");
 
-// ─────────────────────────────────────────────
-// 🔥 拖曳排序（跨天 + 天內）
-// ─────────────────────────────────────────────
-function initSortable() {
-  document.querySelectorAll(".dayContent").forEach(el => {
-    const instance = new Sortable(el, {
-      group: "shared",      // 跨天移動
-      animation: 150,
-      draggable: ".place",
-      ghostClass: "sortable-ghost",
-      onEnd: syncOrder
-    });
-    sortableInstances.push(instance);  // 🔑 記錄實例
-  });
-}
+    };
 
-function syncOrder() {
-  const newTrips = [];
+});
 
-  document.querySelectorAll(".dayContent").forEach(contentEl => {
-    const currentDayNum = parseInt(contentEl.dataset.day);
-    const oldMeta = store.trips.find(d => d.day === currentDayNum);
-    if (!oldMeta) return;
+// ===============================
+// Render 行程
+// ===============================
 
-    const orderedPlaces = [];
-    contentEl.querySelectorAll(".place").forEach(placeEl => {
-      const pid = parseInt(placeEl.dataset.id);
-      // 在全部天數中找到這個景點
-      for (const d of store.trips) {
-        const p = d.places.find(i => i.id === pid);
-        if (p) { orderedPlaces.push(p); break; }
-      }
+function renderTrips(){
+
+    const container=document.getElementById("tripContainer");
+
+    container.innerHTML="";
+
+    appData.trips.forEach(day=>{
+
+        let html=`
+
+        <div class="day-card">
+
+            <div class="day-header">
+
+                <div class="day-title">
+
+                    Day ${day.day}
+
+                    ·
+
+                    ${day.city}
+
+                </div>
+
+            </div>
+
+        `;
+
+        day.items.forEach(item=>{
+
+            html+=`
+
+            <div class="trip-item">
+
+                <div class="trip-left">
+
+                    <span class="trip-time">
+
+                    ${item.time}
+
+                    </span>
+
+                    <span class="trip-name">
+
+                    ${item.title}
+
+                    </span>
+
+                </div>
+
+                <button
+                class="trip-delete">
+
+                🗑
+
+                </button>
+
+            </div>
+
+            `;
+
+        });
+
+        html+=`</div>`;
+
+        container.innerHTML+=html;
+
     });
 
-    if (orderedPlaces.length > 0) {
-      newTrips.push({ ...oldMeta, day: currentDayNum, places: orderedPlaces });
-    }
-  });
+}
+// ===============================
+// Render 行李清單
+// ===============================
 
-  store.trips = newTrips;
-  normalizeDays();
-  saveData();
-  renderTrips();
-  toast("已同步更新排序 🔁");
+function renderPacking() {
+
+    const container = document.getElementById("packingContainer");
+    container.innerHTML = "";
+
+    appData.packing.forEach((category, categoryIndex) => {
+
+        let html = `
+            <div class="category">
+                <h3>${category.title}</h3>
+        `;
+
+        category.items.forEach((item, itemIndex) => {
+
+            html += `
+                <label class="check-item">
+
+                    <input
+                        type="checkbox"
+                        ${item.done ? "checked" : ""}
+                        onchange="togglePacking(${categoryIndex},${itemIndex})">
+
+                    <span style="
+                        ${item.done ? "text-decoration:line-through;opacity:.5;" : ""}
+                    ">
+                        ${item.name}
+                    </span>
+
+                </label>
+            `;
+
+        });
+
+        html += `</div>`;
+
+        container.innerHTML += html;
+
+    });
+
 }
 
-// ─────────────────────────────────────────────
-// ⚡ 快速新增
-// ─────────────────────────────────────────────
-function quickAddPlace() {
-  const input = document.getElementById("quickInput");
-  const title = input.value.trim();
-  if (!title) { input.focus(); return; }
+// ===============================
+// 勾選行李
+// ===============================
 
-  const item = { id: Date.now(), time: "12:00", title, note: "快速模式建立，點擊可編輯。", img: "" };
-  const dayOne = store.trips.find(d => d.day === 1);
+function togglePacking(categoryIndex, itemIndex) {
 
-  if (dayOne) {
-    dayOne.places.push(item);
-  } else {
-    store.trips.push({ day: 1, date: "2026/07/02", city: "Sydney", banner: "", places: [item] });
-  }
+    appData.packing[categoryIndex]
+        .items[itemIndex]
+        .done = !appData.packing[categoryIndex]
+        .items[itemIndex]
+        .done;
 
-  input.value = "";
-  normalizeDays(); saveData(); renderTrips();
-  toast("⚡ 快速新增成功");
+    saveData();
+
+    renderPacking();
+
 }
 
-// ─────────────────────────────────────────────
-// ✏️ 完整彈窗儲存
-// ─────────────────────────────────────────────
-function saveTrip() {
-  const dayNum  = parseInt(document.getElementById("editDayNum").value) || 1;
-  const rawDate = document.getElementById("editDate").value.replace(/-/g, "/");
-  const city    = document.getElementById("editCity").value.trim() || "Sydney";
-  const title   = document.getElementById("editPlace").value.trim();
-  const time    = document.getElementById("editTime").value || "12:00";
-  const note    = document.getElementById("editNote").value.trim() || "無備註。";
-  const photo   = document.getElementById("editPhoto").value.trim();
-  let   banner  = document.getElementById("editBanner").value.trim();
+// ===============================
+// Render 記帳
+// ===============================
 
-  if (!banner) banner = "images/banner/sydney.jpg"; // 阻斷空值污染
+function renderExpense() {
 
-  if (!title) {
-    document.getElementById("editPlace").focus();
-    toast("⚠️ 景點名稱不能為空");
-    return;
-  }
+    const container = document.getElementById("expenseContainer");
 
-  if (editMode) {
-    // 更新現有景點
-    let srcDay = null, placeObj = null;
-    for (const d of store.trips) {
-      const f = d.places.find(p => p.id === editMode.id);
-      if (f) { srcDay = d; placeObj = f; break; }
-    }
+    const totalLabel = document.getElementById("expenseTotal");
 
-    if (placeObj) {
-      Object.assign(placeObj, { time, title, note, img: photo });
+    container.innerHTML = "";
 
-      if (srcDay.day === dayNum) {
-        // 同天：只更新 meta
-        Object.assign(srcDay, { date: rawDate, city, banner });
-      } else {
-        // 跨天移動
-        srcDay.places = srcDay.places.filter(p => p.id !== editMode.id);
-        let target = store.trips.find(d => d.day === dayNum);
-        if (target) {
-          target.places.push(placeObj);
-        } else {
-          store.trips.push({ day: dayNum, date: rawDate, city, banner, places: [placeObj] });
-        }
-      }
-    }
-    editMode = null;
-  } else {
-    // 新增景點
-    const newItem = { id: Date.now(), time, title, note, img: photo };
-    let target = store.trips.find(d => d.day === dayNum);
-    if (target) {
-      target.places.push(newItem);
-    } else {
-      store.trips.push({ day: dayNum, date: rawDate, city, banner, places: [newItem] });
-    }
-  }
+    let total = 0;
 
-  normalizeDays(); saveData(); renderTrips(); closeEditor();
-  toast("行程已儲存 ✔");
+    appData.expenses.forEach((item, index) => {
+
+        total += Number(item.amount);
+
+        container.innerHTML += `
+
+        <div class="expense-item">
+
+            <div>
+
+                <strong>${item.title}</strong>
+
+                <br>
+
+                <small>${item.date}</small>
+
+            </div>
+
+            <div>
+
+                ${item.amount} AUD
+
+            </div>
+
+        </div>
+
+        `;
+
+    });
+
+    totalLabel.innerHTML = total + " AUD";
+
 }
 
-function editPlace(id) {
-  let dayObj = null, placeObj = null;
-  for (const d of store.trips) {
-    const f = d.places.find(p => p.id === id);
-    if (f) { dayObj = d; placeObj = f; break; }
-  }
-  if (!placeObj) return;
+// ===============================
+// 新增記帳
+// ===============================
 
-  editMode = { id };
-  document.getElementById("editDayNum").value  = dayObj.day;
-  document.getElementById("editDate").value    = dayObj.date.replaceAll("/", "-");
-  document.getElementById("editCity").value    = dayObj.city;
-  document.getElementById("editPlace").value   = placeObj.title;
-  document.getElementById("editTime").value    = placeObj.time;   // 🔑 修正：原版漏填
-  document.getElementById("editNote").value    = placeObj.note;
-  document.getElementById("editBanner").value  = dayObj.banner || "";
-  document.getElementById("editPhoto").value   = placeObj.img  || "";
+document.getElementById("addExpenseBtn").onclick = () => {
 
-  openEditor("✏️ 編輯行程");
+    const title = prompt("輸入項目");
+
+    if (!title) return;
+
+    const amount = prompt("金額 (AUD)");
+
+    if (!amount) return;
+
+    appData.expenses.push({
+
+        title,
+
+        amount,
+
+        date: new Date().toLocaleDateString()
+
+    });
+
+    saveData();
+
+    renderExpense();
+
+};
+
+// ===============================
+// 初始化
+// ===============================
+
+function init() {
+
+    renderTrips();
+
+    renderPacking();
+
+    renderExpense();
+
 }
 
-function deletePlace(e, id) {
-  e.stopPropagation();
-  if (!confirm("確定移除此景點？")) return;
-  store.trips.forEach(d => { d.places = d.places.filter(p => p.id !== id); });
-  normalizeDays(); saveData(); renderTrips();
-  toast("景點已刪除 🗑");
-}
-
-// ─────────────────────────────────────────────
-// 🧳 行李清單模組
-// ─────────────────────────────────────────────
-function renderBagSelect() {
-  const select = document.getElementById("bagCategorySelect");
-  select.innerHTML = Object.keys(store.bags).map(k =>
-    `<option value="${k}">${k}</option>`
-  ).join("");
-}
-
-function renderBag() {
-  renderBagSelect();
-
-  // 進度條
-  let total = 0, done = 0;
-  Object.values(store.bags).forEach(items => {
-    total += items.length;
-    done  += items.filter(i => i.done).length;
-  });
-  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
-  document.getElementById("bagProgress").innerHTML = `
-    <div class="progress-bar-wrap">
-      <div class="progress-bar-fill" style="width:${pct}%"></div>
-    </div>
-    <div class="progress-label">${done} / ${total} 項已完成（${pct}%）</div>`;
-
-  // 清單
-  const container = document.getElementById("bagContainer");
-  container.innerHTML = Object.keys(store.bags).map(category => {
-    const items = store.bags[category];
-    const itemsHTML = items.map((item, i) => `
-      <div class="bagItem">
-        <label class="bagItemLeft ${item.done ? 'done' : ''}">
-          <input type="checkbox" ${item.done ? "checked" : ""}
-                 onchange="toggleBag('${category}',${i})">
-          <span>${item.text}</span>
-        </label>
-        <button class="bagItemDel" onclick="deleteBagItem('${category}',${i})"
-                aria-label="刪除">✕</button>
-      </div>`).join("");
-
-    const allDone = items.length > 0 && items.every(i => i.done);
-    return `
-      <div class="bagCard ${allDone ? 'bag-complete' : ''}">
-        <h3>${category} ${allDone ? '✅' : ''}</h3>
-        <div>${itemsHTML}</div>
-      </div>`;
-  }).join("");
-}
-
-function toggleBag(category, index) {
-  store.bags[category][index].done = !store.bags[category][index].done;
-  saveData(); renderBag();
-}
-
-function addBagItem() {
-  const cat   = document.getElementById("bagCategorySelect").value;
-  const input = document.getElementById("bagInput");
-  const text  = input.value.trim();
-  if (!text) { input.focus(); return; }
-
-  if (!store.bags[cat]) store.bags[cat] = [];
-  store.bags[cat].push({ text, done: false });
-  input.value = "";
-  saveData(); renderBag();
-  toast("已加到行李清單 🧳");
-}
-
-function deleteBagItem(category, index) {
-  store.bags[category].splice(index, 1);
-  saveData(); renderBag();
-}
-
-// ─────────────────────────────────────────────
-// 🗃️ 更多頁面
-// ─────────────────────────────────────────────
-function renderMore() {
-  const totalPlaces = store.trips.reduce((s, d) => s + d.places.length, 0);
-  const totalBag    = Object.values(store.bags).reduce((s, a) => s + a.length, 0);
-  document.getElementById("infoTripCount").textContent = `${store.trips.length} 天 / ${totalPlaces} 景點`;
-  document.getElementById("infoBagCount").textContent  = `${totalBag} 項`;
-}
-
-function resetData() {
-  if (!confirm("確定清除所有資料並還原預設行程？")) return;
-  localStorage.removeItem("appData_v2");
-  loadData(); normalizeDays(); renderTrips();
-  toast("已還原預設資料 ✔");
-}
-
-// ─────────────────────────────────────────────
-// 📦 SPA 分頁系統
-// ─────────────────────────────────────────────
-const tabs = document.querySelectorAll(".tab");
-const fab  = document.getElementById("editButton");
-
-tabs.forEach(tab => {
-  tab.addEventListener("click", () => {
-    // 更新 tab 狀態
-    tabs.forEach(t => t.classList.remove("active"));
-    tab.classList.add("active");
-
-    // 隱藏所有 page
-    document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
-
-    const pageKey = tab.dataset.page;
-    const pageEl  = document.getElementById("page-" + pageKey);
-    if (pageEl) pageEl.classList.add("active");
-
-    // FAB 只在行程頁顯示
-    fab.style.display = (pageKey === "home") ? "flex" : "none";
-
-    // 各頁面 lazy render
-    if (pageKey === "bag")   renderBag();
-    if (pageKey === "more")  renderMore();
-  });
-});
-
-// ─────────────────────────────────────────────
-// 🛠️ Modal 控制
-// ─────────────────────────────────────────────
-function openEditor(title = "✏️ 新增行程") {
-  document.getElementById("modalTitle").textContent = title;
-  document.getElementById("editModal").style.display = "flex";
-  // Trap focus
-  setTimeout(() => document.getElementById("editPlace").focus(), 100);
-}
-
-function closeEditor() {
-  document.getElementById("editModal").style.display = "none";
-  editMode = null;
-}
-
-// 點 FAB → 新增模式
-fab.addEventListener("click", () => {
-  editMode = null;
-  const today = new Date().toISOString().split("T")[0];
-  const nextDay = (store.trips.length > 0)
-    ? Math.max(...store.trips.map(d => d.day)) + 1
-    : 1;
-  const nextDate = store.trips.find(d => d.day === nextDay)?.date || today.replace(/-/g, "/");
-
-  document.getElementById("editDayNum").value  = nextDay;
-  document.getElementById("editDate").value    = nextDate.replace(/\//g, "-");
-  document.getElementById("editCity").value    = "";
-  document.getElementById("editPlace").value   = "";
-  document.getElementById("editTime").value    = "09:00";
-  document.getElementById("editNote").value    = "";
-  document.getElementById("editBanner").value  = "";
-  document.getElementById("editPhoto").value   = "";
-  openEditor("✏️ 新增行程");
-});
-
-// Esc 關閉 modal
-document.addEventListener("keydown", e => {
-  if (e.key === "Escape") closeEditor();
-});
-
-// 點 modal 背景關閉
-document.getElementById("editModal").addEventListener("click", e => {
-  if (e.target === document.getElementById("editModal")) closeEditor();
-});
-
-// ─────────────────────────────────────────────
-// 🔍 搜尋
-// ─────────────────────────────────────────────
-let searchDebounce = null;
-document.getElementById("searchBox").addEventListener("input", e => {
-  clearTimeout(searchDebounce);
-  searchDebounce = setTimeout(() => renderTrips(e.target.value), 200);
-});
-
-// ─────────────────────────────────────────────
-// 🛠️ PWA
-// ─────────────────────────────────────────────
-let deferredPrompt = null;
-
-window.addEventListener("beforeinstallprompt", e => {
-  e.preventDefault();
-  deferredPrompt = e;
-  document.getElementById("pwaBanner").style.display = "flex";
-});
-
-function installPWA() {
-  if (!deferredPrompt) return;
-  deferredPrompt.prompt();
-  deferredPrompt.userChoice.then(choice => {
-    console.log("PWA install:", choice.outcome);
-    deferredPrompt = null;
-    document.getElementById("pwaBanner").style.display = "none";
-  });
-}
-
-// ─────────────────────────────────────────────
-// 🍞 Toast 通知
-// ─────────────────────────────────────────────
-let toastTimer = null;
-function toast(text) {
-  const t = document.getElementById("toast");
-  t.textContent = text;
-  t.classList.add("show");
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.classList.remove("show"), 2000);
-}
-
-// ─────────────────────────────────────────────
-// 🚀 啟動
-// ─────────────────────────────────────────────
-window.addEventListener("DOMContentLoaded", () => {
-  loadData();
-  normalizeDays();
-  renderTrips();
-
-  // 🔑 修正：正確的 SW 檔名
-  if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("./sw.js")
-      .then(reg => console.log("SW 已就緒", reg.scope))
-      .catch(err => console.warn("SW 註冊失敗", err));
-  }
-});
+init();
